@@ -27,7 +27,6 @@ async function validateToken(req, res, next) {
     try {
       const decoded = jwt.decode(token, { complete: true })
       // eslint-disable-next-line no-console
-      console.log("JWT decoded payload:", decoded?.payload)
     } catch (e) {
       // ignore
     }

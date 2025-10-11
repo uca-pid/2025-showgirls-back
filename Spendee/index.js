@@ -48,9 +48,12 @@ app.get("/gasto", validateToken, async (req, res) => {
 
 app.get("/gasto/:userId", validateToken, async (req, res) => {
   const { userId } = req.params
+  const { limit, order } = req.query
   try {
     const userExpenses = await prisma.gasto.findMany({
       where: { usuarioId: userId },
+      take: Number(limit),
+      orderBy: { fecha: order },
     })
     res.status(200).json(userExpenses)
   } catch (error) {
@@ -100,7 +103,6 @@ app.put("/moverGastosCategoria", validateToken, async (req, res) => {
   const { categoriaOrigenId, categoriaDestinoId } = req.body
   try {
     const uid = req.usuario?.sub || req.usuario?.user_id || req.usuario?.uid
-    console.log({ uid, categoriaOrigenId, categoriaDestinoId })
     if (!categoriaOrigenId || !categoriaDestinoId) {
       return res
         .status(400)
@@ -120,7 +122,6 @@ app.put("/moverGastosCategoria", validateToken, async (req, res) => {
         .json({ error: "La categoría de origen no existe o no te pertenece." })
     }
     if (!destino) {
-      console.log("No existe la categoría destino")
       return res
         .status(404)
         .json({ error: "La categoría de destino no existe o no te pertenece." })
@@ -218,8 +219,6 @@ app.get("/balance/:userId", validateToken, async (req, res) => {
       : 0
 
     const balance = sumaIngresos - sumaGastos
-    console.log({ sumaIngresos, sumaGastos, balance })
-
     res.json({ balance, sumaIngresos, sumaGastos })
   } catch (error) {
     console.error(error)
@@ -340,7 +339,6 @@ app.delete("/deleteCategory/:id", validateToken, async (req, res) => {
 })
 
 app.put("/modifyCategory/:id", validateToken, async (req, res) => {
-  console.log("Modificando categoría...")
   const { id } = req.params
   const { categoria, descripcion, icono, color } = req.body
 
