@@ -294,8 +294,8 @@ app.get("/categories", validateToken, async (req, res) => {
 
 //ruta para obtener todos los gastos de un usuario por categoría
 //recibe user y categoryId por query params
-app.post("/gastosPorCategoria", validateToken, async (req, res) => {
-  const { userId, categoryId } = req.body
+app.get("/gastosPorCategoria", validateToken, async (req, res) => {
+  const { userId, categoryId } = req.query
   try {
     const gastos = await prisma.gasto.findMany({
       where: {
