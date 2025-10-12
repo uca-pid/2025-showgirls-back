@@ -54,13 +54,28 @@ app.get("/gasto", validateToken, async (req, res) => {
 
 app.get("/gasto/:userId", validateToken, async (req, res) => {
   const { userId } = req.params
-  const { limit, order } = req.query
+  const { limit: limitRaw, order: orderRaw } = req.query
+
+  const orderDir = String(orderRaw || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc'
+
+  let take
+  if (limitRaw === undefined) {
+    take = 10
+  } else if (String(limitRaw).toLowerCase() === 'all') {
+    take = undefined
+  } else {
+    const parsed = parseInt(limitRaw, 10)
+    take = Number.isNaN(parsed) || parsed <= 0 ? 10 : parsed
+  }
+
   try {
-    const userExpenses = await prisma.gasto.findMany({
+    const query = {
       where: { usuarioId: userId },
-      take: Number(limit),
-      orderBy: { fecha: order },
-    })
+      orderBy: { fecha: orderDir },
+    }
+    if (take !== undefined) query.take = take
+
+    const userExpenses = await prisma.gasto.findMany(query)
     res.status(200).json(userExpenses)
   } catch (error) {
     res.status(400).json({ error: error.message })
@@ -252,6 +267,8 @@ app.post("/customCategory", validateToken, async (req, res) => {
 })
 
 app.get("/categories", validateToken, async (req, res) => {
+  const {month, year} = req.query
+  console.log("Fetching categories for", {month, year})
   try {
     const uid =
       req.usuario?.sub ||
@@ -264,11 +281,32 @@ app.get("/categories", validateToken, async (req, res) => {
     })
     let sumGastos = new Map()
     if (uid) {
+      // Construir filtro de fechas opcional si se provee month and/or year
+      const dateFilter = {}
+      const m = month ? parseInt(month, 10) : undefined
+      const y = year ? parseInt(year, 10) : undefined
+
+      if ((!isNaN(m) && m >= 1 && m <= 12) || (!isNaN(y))) {
+        // Si se da month sin year, asumimos el año actual
+        const now = new Date()
+        const yy = !isNaN(y) ? y : now.getFullYear()
+
+        if (!isNaN(m) && m >= 1 && m <= 12) {
+          // Filtrar por mes específico
+          const start = new Date(yy, m - 1, 1)
+          const end = new Date(yy, m, 1) // primer día del siguiente mes
+          dateFilter.fecha = { gte: start, lt: end }
+        } else {
+          // Solo año: filtrar todo el año
+          const start = new Date(yy, 0, 1)
+          const end = new Date(yy + 1, 0, 1)
+          dateFilter.fecha = { gte: start, lt: end }
+        }
+      }
+
       const sums = await prisma.gasto.groupBy({
         by: ["categoriaId"],
-        where: {
-          usuarioId: uid,
-        },
+        where: Object.assign({ usuarioId: uid }, dateFilter),
         _sum: {
           gasto: true,
         },
@@ -353,7 +391,6 @@ app.put("/modifyCategory/:id", validateToken, async (req, res) => {
     const categoriaExistente = await prisma.categorias.findUnique({
       where: { id: parseInt(id) },
     })
-
     if (!categoriaExistente) {
       return res.status(404).json({ error: "Categoría no encontrada" })
     }
@@ -362,10 +399,11 @@ app.put("/modifyCategory/:id", validateToken, async (req, res) => {
         .status(403)
         .json({ error: "No tenés permiso para modificar esta categoría" })
     }
-    const categoriaActualizada = await prisma.customCategories.update({
+    // usar el modelo correcto (`categorias`) y los campos reales (nombre)
+    const categoriaActualizada = await prisma.categorias.update({
       where: { id: parseInt(id) },
       data: {
-        nombre: categoria || categoriaExistente.categoria,
+        nombre: categoria || categoriaExistente.nombre,
         descripcion: descripcion || categoriaExistente.descripcion,
         icono: icono || categoriaExistente.icono,
         color: color || categoriaExistente.color,
